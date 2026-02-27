@@ -108,18 +108,18 @@ export default function PlaybackApp() {
   const [user, setUser] = useState({ name: "Guest" });
   const router = useRouter();
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    console.log(token);
-    if (!token) {
-      router.push("/");
-    } else {
-      // Decode JWT or fetch user details from backend
-      const decodedUser = JSON.parse(atob(token.split(".")[1])); // Decoding JWT
-      console.log(decodedUser);
-      setUser(decodedUser);
-    }
-  }, [router]);
+  // useEffect(() => {
+  //   const token = localStorage.getItem("token");
+  //   console.log(token);
+  //   if (!token) {
+  //     router.push("/");
+  //   } else {
+  //     // Decode JWT or fetch user details from backend
+  //     const decodedUser = JSON.parse(atob(token.split(".")[1])); // Decoding JWT
+  //     console.log(decodedUser);
+  //     setUser(decodedUser);
+  //   }
+  // }, [router]);
 
   const handleLogout = () => {
     logout();
