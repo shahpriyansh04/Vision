@@ -689,7 +689,7 @@ Unlike traditional programming, where explicit instructions are provided, machin
               <div className="flex items-center gap-2">
                 <Play className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                 <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-500">
-                  Playback
+                  Vision
                 </h1>
               </div>
             </div>
@@ -1474,9 +1474,8 @@ Unlike traditional programming, where explicit instructions are provided, machin
                         </h2>
                       </div>
 
-                
                       <ScrollArea className="h-[440px] p-4">
-                      <SearchPage query="machine learning" />
+                        <SearchPage query="machine learning" />
                       </ScrollArea>
                     </TabsContent>
                   </div>
@@ -1528,65 +1527,80 @@ Unlike traditional programming, where explicit instructions are provided, machin
             </div>
           </div>
 
-           {/* Additional Widgets Section */}
-           <div className="mt-16 ">
-            
+          {/* Additional Widgets Section */}
+          <div className="mt-16 ">
             {/* Stats Widget */}
             <div className="my-16 ">
-           <StatsWidget/>
+              <StatsWidget />
             </div>
-            
+
             {/* Calendar Widget */}
             <div className="my-16">
               <div className="max-w-5xl mx-auto bg-white dark:bg-slate-900 rounded-xl shadow-md overflow-hidden">
                 <div className="p-6">
-                  <h2 className="text-xl font-bold mb-6">Upcoming Learning Schedule</h2>
+                  <h2 className="text-xl font-bold mb-6">
+                    Upcoming Learning Schedule
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
                     {Array.from({ length: 7 }).map((_, i) => {
-                      const isToday = i === 2
-                      const hasEvent = [1, 3, 5].includes(i)
+                      const isToday = i === 2;
+                      const hasEvent = [1, 3, 5].includes(i);
                       return (
-                        <div 
-                          key={i} 
+                        <div
+                          key={i}
                           className={`p-4 rounded-lg border ${
-                            isToday 
-                              ? 'bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-800' 
-                              : 'border-gray-200 dark:border-gray-700'
+                            isToday
+                              ? "bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-800"
+                              : "border-gray-200 dark:border-gray-700"
                           }`}
                         >
                           <div className="text-center">
                             <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
+                              {
+                                [
+                                  "Mon",
+                                  "Tue",
+                                  "Wed",
+                                  "Thu",
+                                  "Fri",
+                                  "Sat",
+                                  "Sun",
+                                ][i]
+                              }
                             </div>
-                            <div className={`text-lg font-semibold ${isToday ? 'text-purple-600 dark:text-purple-400' : ''}`}>
+                            <div
+                              className={`text-lg font-semibold ${
+                                isToday
+                                  ? "text-purple-600 dark:text-purple-400"
+                                  : ""
+                              }`}
+                            >
                               {i + 10}
                             </div>
                           </div>
                           {hasEvent && (
                             <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
-                              {i === 1 && 'Data Science - 2PM'}
-                              {i === 3 && 'ML Workshop - 10AM'}
-                              {i === 5 && 'AI Ethics - 4PM'}
+                              {i === 1 && "Data Science - 2PM"}
+                              {i === 3 && "ML Workshop - 10AM"}
+                              {i === 5 && "AI Ethics - 4PM"}
                             </div>
                           )}
                         </div>
-                      )
+                      );
                     })}
                   </div>
                 </div>
               </div>
             </div>
-            
+
             {/* Study Group Widget */}
             <div className="my-16">
-            <StudyGroup/>
-            
+              <StudyGroup />
             </div>
-            
+
             {/* Flashcards Widget */}
             <div className="my-16 relative">
-    
-            <FlashCard />
+              <FlashCard />
             </div>
           </div>
         </main>

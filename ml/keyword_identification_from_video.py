@@ -9,8 +9,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
 
-def generate_keywords(youtube_url):
-    transcript_text = get_transcript_text(youtube_url)
+def generate_keywords(transcript_text):
+    # transcript_text = get_transcript_text(youtube_url)
     prompt = """
     You are an expert at identifying key concepts from the transcripts i have provided you of the video.
     Give me only 3 key concepts from the entire transcript that you think are important to study more about.

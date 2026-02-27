@@ -13,8 +13,8 @@ from transcripts_from_yt_final import get_transcript_text
 # transcript_text = extract_transcript(youtube_video_url)
 # print(transcript_text)
 
-def generate_notes_from_yt_in(youtube_url):
-    transcript_text = get_transcript_text(youtube_url)
+def generate_notes_from_yt_in(transcript_text):
+    # transcript_text = get_transcript_text(youtube_url)
     prompt = """
     You are an expert at making notes for exam purposes from YouTube videos. I will provide you with a transcript of a YouTube video, 
     and you need to generate detailed notes based on the content of the video.

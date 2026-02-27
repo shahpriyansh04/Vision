@@ -56,7 +56,7 @@ import { Toaster } from "@/components/ui/toaster";
 import QuizModal from "./quiz-modal";
 import { SearchPage } from "@/app/test3/page";
 import { model, generationConfig, safetySettings } from "@/lib/ai";
-import html2canvas from 'html2canvas';
+import html2canvas from "html2canvas";
 
 export default function PlaybackApp() {
   const [activeTab, setActiveTab] = useState("transcript");
@@ -99,6 +99,7 @@ export default function PlaybackApp() {
   const [timestamps, setTimestamps] = useState([]);
   const [keywords, setKeywords] = useState([]);
   const [loading, setLoading] = useState(false);
+  console.log(selectedTimestampData);
 
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -107,18 +108,18 @@ export default function PlaybackApp() {
   const [user, setUser] = useState({ name: "Guest" });
   const router = useRouter();
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    console.log(token);
-    if (!token) {
-      router.push("/");
-    } else {
-      // Decode JWT or fetch user details from backend
-      const decodedUser = JSON.parse(atob(token.split(".")[1])); // Decoding JWT
-      console.log(decodedUser);
-      setUser(decodedUser);
-    }
-  }, [router]);
+  // useEffect(() => {
+  //   const token = localStorage.getItem("token");
+  //   console.log(token);
+  //   if (!token) {
+  //     router.push("/");
+  //   } else {
+  //     // Decode JWT or fetch user details from backend
+  //     const decodedUser = JSON.parse(atob(token.split(".")[1])); // Decoding JWT
+  //     console.log(decodedUser);
+  //     setUser(decodedUser);
+  //   }
+  // }, [router]);
 
   const handleLogout = () => {
     logout();
@@ -598,73 +599,79 @@ Unlike traditional programming, where explicit instructions are provided, machin
       // For YouTube videos
       const currentTime = youtubePlayerRef.current?.getCurrentTime() || 0;
       const wasPlaying = youtubePlayerRef.current?.getPlayerState() === 1;
-      
+
       // Pause video temporarily
       if (wasPlaying && youtubePlayerRef.current) {
         youtubePlayerRef.current.pauseVideo();
       }
-      
+
       try {
         console.log("Capturing YouTube screenshot at", formatTime(currentTime));
-        
+
         // Call the backend API to get the screenshot
-        const response = await fetch('http://localhost:8000/api/screenshots/youtube', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            videoId: youtubeVideoId,
-            timestamp: currentTime
-          }),
-        });
-        
+        const response = await fetch(
+          "http://localhost:8000/api/screenshots/youtube",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              videoId: youtubeVideoId,
+              timestamp: currentTime,
+            }),
+          }
+        );
+
         if (!response.ok) {
-          throw new Error('Screenshot API request failed');
+          throw new Error("Screenshot API request failed");
         }
-        
+
         // Parse the JSON response
         const responseData = await response.json();
         console.log("Screenshot response:", responseData);
-        
+        setSelectedTimestampData(responseData);
         if (responseData.success && responseData.filePath) {
           // Extract just the filename from the full path
-          const filename = responseData.filePath.split('\\').pop();
-          
+          const filename = responseData.filePath.split("/").pop();
+
           // Add small delay to ensure file is written
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           // Create a data URL using FileReader (read directly from disk)
           try {
             // Instead of trying to load from a URL path, read the file directly
             // since it's on the same machine, we'll use the full path
             const fullPath = responseData.filePath;
-            
+
             // Create a URL that can be displayed immediately in the browser
             // For development purposes, we can use the timestamp to force a reload and bypass cache
             const timestamp = new Date().getTime();
             const screenshotUrl = `http://localhost:8000/screenshots/${filename}?t=${timestamp}`;
-            
+
             // Add to screenshots array with proper URL
             const newScreenshot = {
               time: currentTime,
               dataUrl: screenshotUrl,
               explanation: `Screenshot at ${formatTime(currentTime)}`,
-              filePath: responseData.filePath
+              filePath: responseData.filePath,
             };
-            
-            setScreenshots(prevScreenshots => [...prevScreenshots, newScreenshot]);
+
+            setScreenshots((prevScreenshots) => [
+              ...prevScreenshots,
+              newScreenshot,
+            ]);
             console.log("Screenshot captured successfully");
           } catch (fileError) {
             console.error("Error reading screenshot file:", fileError);
             throw fileError;
           }
         } else {
-          throw new Error('Invalid screenshot response');
+          throw new Error("Invalid screenshot response");
         }
       } catch (error) {
         console.error("Screenshot API error:", error);
-        
+
         // Use fallback method for screenshot
         fallbackScreenshot(currentTime, wasPlaying);
       } finally {
@@ -674,60 +681,66 @@ Unlike traditional programming, where explicit instructions are provided, machin
         }
       }
     } else if (videoRef.current) {
-  
-    // For local videos - keep existing implementation
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const currentTime = video.currentTime;
-    const wasPlaying = !video.paused;
-    
-    // Pause to get clear screenshot
-    video.pause();
-    
-    try {
-      if (!canvas) throw new Error("Canvas not available");
-      
-      // Set canvas size to match video dimensions
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      
-      // Draw the current video frame
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Add timestamp overlay
-      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-      ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
-      ctx.fillStyle = "white";
-      ctx.font = "bold 14px Arial";
-      ctx.fillText(`Time: ${formatTime(currentTime)}`, 10, canvas.height - 10);
-      
-      // Get the screenshot as data URL
-      const dataUrl = canvas.toDataURL('image/png');
-      
-      // Save the screenshot
-      const newScreenshot = {
-        time: currentTime,
-        dataUrl,
-        explanation: `Screenshot at ${formatTime(currentTime)}`
-      };
-      
-      setScreenshots(prevScreenshots => [...prevScreenshots, newScreenshot]);
-      
-      // Resume playing if needed
-      if (wasPlaying) {
-        video.play();
-      }
-    } catch (error) {
-      console.error("Local video screenshot error:", error);
-      
-      // Resume playing if needed
-      if (wasPlaying) {
-        video.play();
+      // For local videos - keep existing implementation
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const currentTime = video.currentTime;
+      const wasPlaying = !video.paused;
+
+      // Pause to get clear screenshot
+      video.pause();
+
+      try {
+        if (!canvas) throw new Error("Canvas not available");
+
+        // Set canvas size to match video dimensions
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+
+        // Draw the current video frame
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Add timestamp overlay
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
+        ctx.fillStyle = "white";
+        ctx.font = "bold 14px Arial";
+        ctx.fillText(
+          `Time: ${formatTime(currentTime)}`,
+          10,
+          canvas.height - 10
+        );
+
+        // Get the screenshot as data URL
+        const dataUrl = canvas.toDataURL("image/png");
+
+        // Save the screenshot
+        const newScreenshot = {
+          time: currentTime,
+          dataUrl,
+          explanation: `Screenshot at ${formatTime(currentTime)}`,
+        };
+
+        setScreenshots((prevScreenshots) => [
+          ...prevScreenshots,
+          newScreenshot,
+        ]);
+
+        // Resume playing if needed
+        if (wasPlaying) {
+          video.play();
+        }
+      } catch (error) {
+        console.error("Local video screenshot error:", error);
+
+        // Resume playing if needed
+        if (wasPlaying) {
+          video.play();
+        }
       }
     }
-  }
-};
+  };
 
   // Toggle miniplayer mode
   const toggleMiniplayer = () => {
@@ -771,7 +784,6 @@ Unlike traditional programming, where explicit instructions are provided, machin
       console.log("Selected timestamp belongs to:", timestampObject);
       setSelectedTimestampObject(timestampObject);
       fetchDate();
-      setSelectedLoading(true);
 
       // Perform any additional actions with the found timestampObject
     } else {
@@ -794,7 +806,7 @@ Unlike traditional programming, where explicit instructions are provided, machin
               <div className="flex items-center gap-2">
                 <Play className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                 <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-500">
-                  Playback
+                  Vision
                 </h1>
               </div>
             </div>
@@ -863,15 +875,7 @@ Unlike traditional programming, where explicit instructions are provided, machin
         <main className="container mx-auto px-4 py-6 relative z-10">
           <div className="mb-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold">
-                  <TextGenerateEffect words="Introduction to Machine Learning" />
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  Learn the fundamentals of machine learning algorithms and
-                  applications
-                </p>
-              </div>
+              <div></div>
 
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" className="gap-1">
@@ -1030,8 +1034,14 @@ Unlike traditional programming, where explicit instructions are provided, machin
                       }`}
                     >
                       {youtubeVideoId ? (
-                        <div className="aspect-video bg-black relative" id="youtube-player-container">
-                          <div id="youtube-player" className="w-full h-full"></div>
+                        <div
+                          className="aspect-video bg-black relative"
+                          id="youtube-player-container"
+                        >
+                          <div
+                            id="youtube-player"
+                            className="w-full h-full"
+                          ></div>
                         </div>
                       ) : (
                         <div className="aspect-video bg-black relative">
@@ -1209,33 +1219,29 @@ Unlike traditional programming, where explicit instructions are provided, machin
               {/* Selected Timestamp Explanation */}
               {selectedTimestamp !== null && (
                 <div>
-                  {selectedLoading ? (
-                    <div className="mt-6 bg-white dark:bg-slate-900 rounded-xl shadow-md p-4">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-medium flex items-center gap-2">
-                          <Info className="h-4 w-4 text-blue-500" />
-                          Timestamp Analysis: {formatTime(selectedTimestamp)}
-                        </h3>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedTimestamp(null)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <p>
-                          {videoExplanations[Math.floor(selectedTimestamp)] ||
-                            `At ${formatTime(
-                              selectedTimestamp
-                            )}, the video discusses important concepts related to this section. This is a key moment in the presentation that highlights core principles.`}
-                        </p>
-                      </div>
+                  <div className="mt-6 bg-white dark:bg-slate-900 rounded-xl shadow-md p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-medium flex items-center gap-2">
+                        <Info className="h-4 w-4 text-blue-500" />
+                        Timestamp Analysis: {formatTime(selectedTimestamp)}
+                      </h3>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedTimestamp(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                  ) : (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  )}
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <p>
+                        {videoExplanations[Math.floor(selectedTimestamp)] ||
+                          `At${formatTime(selectedTimestamp)},${
+                            selectedTimestampData?.description?.scene
+                          }`}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 

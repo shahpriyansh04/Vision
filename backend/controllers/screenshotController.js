@@ -17,20 +17,26 @@ exports.captureYouTubeScreenshot = async (req, res) => {
     const { videoId, timestamp } = req.body;
 
     if (!videoId) {
-      return res.status(400).json({ success: false, error: "Video ID is required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Video ID is required" });
     }
 
-    console.log(`🎬 Processing Video ID: ${videoId} at Timestamp: ${timestamp}`);
+    console.log(
+      `🎬 Processing Video ID: ${videoId} at Timestamp: ${timestamp}`
+    );
 
     const browser = await puppeteer.launch({
-      headless: true,
+      headless: "new",
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
 
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&start=${Math.floor(timestamp)}`;
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&start=${Math.floor(
+      timestamp
+    )}`;
     console.log(`🔗 Navigating to: ${embedUrl}`);
 
     await page.goto(embedUrl, { waitUntil: "networkidle2" });
@@ -48,7 +54,7 @@ exports.captureYouTubeScreenshot = async (req, res) => {
     });
 
     console.log("🎥 Video loaded. Waiting for rendering...");
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 5000));
 
     console.log("📸 Taking screenshot...");
     const videoElement = await page.$("video");
@@ -61,11 +67,12 @@ exports.captureYouTubeScreenshot = async (req, res) => {
       screenshot = await page.screenshot({ type: "png", fullPage: false });
     }
 
-    await browser.close();
-
-    // ✅ Restore saving in `frontend/temp` directory
+    // Define save path
     const savePath = `C:\\Users\\admin\\Desktop\\Synergy\\LinearDepression_PriyanshShah\\frontend\\temp`;
-    await fs.mkdir(savePath, { recursive: true });
+
+    if (!fs.existsSync(savePath)) {
+      fs.mkdirSync(savePath, { recursive: true });
+    }
 
     // Save screenshot
     const fileName = `screenshot_${videoId}_${Date.now()}.png`;
@@ -82,50 +89,49 @@ exports.captureYouTubeScreenshot = async (req, res) => {
       filePath,
       description,
     });
-
   } catch (error) {
     console.error("❌ Screenshot error:", error);
-    res.status(500).json({ success: false, error: "Failed to capture screenshot", details: error.message });
+    res.status(500).json({
+      success: false,
+      error: "Failed to capture screenshot",
+      details: error.message,
+    });
   }
 };
 
-/**
- * Calls Gemini API to describe an image
- */
-const getGeminiDescription = async (imagePath) => {
-  try {
-    const imageBuffer = await fs.readFile(imagePath);
-    const imageBase64 = imageBuffer.toString("base64");
+// 🎯 Function to Get Image Description from Gemini
+const getGeminiDescription = async (imageBuffer) => {
+    try {
+      const base64Image = imageBuffer.toString("base64");
+  
+      console.log("🖼️ Base64 Image Data:", base64Image.substring(0, 100) + "..."); // Log first 100 chars
+  
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: "image/png",
+                    data: base64Image,
+                  },
+                },
+              ],
+            },
+          ],
+        }
+      );
+  
+      console.log("📡 Gemini API Response:", JSON.stringify(response.data, null, 2));
+  
+      return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "No description available";
+    } catch (error) {
+      console.error("🔥 Gemini API Error:", error?.response?.data || error.message);
+      return "Failed to generate description.";
+    }
+  };
+  
 
-    const prompt = `Analyze this YouTube video screenshot and describe what is happening in detail.
-    Return the response in this exact JSON format:
-    {
-      "scene": "<Give the description of any study things that are shown on the screen- any diagrams or some equations or some text on the screen only related to studying nothing else.Explain anything about the diagram or text or equation>",
-      "objects": ["<List of key objects visible in the screenshot>"],
-      "possible_topic": "<What this video might be about>",
-      "contextual_info": "<Additional details based on what is seen in the image>"
-    }`;
-
-    const result = await model.generateContent([
-      { text: prompt },
-      { inlineData: { mimeType: "image/png", data: imageBase64 } }
-    ]);
-
-    let responseText = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    console.log("📡 Raw Gemini API Response:", responseText);
-
-    // ✅ Remove triple backticks (` ```json `) and trim the response
-    responseText = responseText.replace(/```json|```/g, "").trim();
-
-    // ✅ Attempt to parse JSON safely
-    const jsonResponse = JSON.parse(responseText);
-    console.log("✅ Parsed JSON Response:", jsonResponse);
-
-    return jsonResponse;
-
-  } catch (error) {
-    console.error("🔥 Gemini API Error:", error);
-    return { error: "Failed to generate description due to invalid JSON format." };
-  }
-};
+module.exports = { captureYouTubeScreenshot };

@@ -211,11 +211,18 @@ def all():
             return jsonify({"error": "No YouTube URL provided"}), 400
 
         transcript_with_timestamps = get_transcript_with_timestamps(youtube_url)
-        notes = generate_notes_from_yt_in(youtube_url)
-        keywords = generate_keywords(youtube_url)
+        print("Extracted transcript with timestamps")
+        transcript_text = get_transcript_text(youtube_url)
+        print("Extracted transcript text")
+        notes = generate_notes_from_yt_in(transcript_text)
+        print("Generated notes")
+        keywords = generate_keywords(transcript_text)
+        print("Generated keywords")
+        # title_and_description = generate_title_and_description(transcript_text)
 
         # Store embeddings
         store_embeddings()
+        print("Stored embeddings")
 
         return jsonify({"transcript_with_timestamps": transcript_with_timestamps, "notes": notes, "keywords": keywords}), 200
     except Exception as e:
