@@ -1032,11 +1032,6 @@ Unlike traditional programming, where explicit instructions are provided, machin
                       {youtubeVideoId ? (
                         <div className="aspect-video bg-black relative" id="youtube-player-container">
                           <div id="youtube-player" className="w-full h-full"></div>
-                        <div className="aspect-video bg-black">
-                          <div
-                            id="youtube-player"
-                            className="w-full h-full"
-                          ></div>
                         </div>
                       ) : (
                         <div className="aspect-video bg-black relative">

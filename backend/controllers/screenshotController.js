@@ -1,12 +1,18 @@
 const puppeteer = require("puppeteer");
-const fs = require("fs");
+const fs = require("fs").promises; // Use fs.promises for async handling
 const path = require("path");
-const axios = require("axios");
-require("dotenv").config(); // Load environment variables
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require("dotenv").config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-const captureYouTubeScreenshot = async (req, res) => {
+/**
+ * Captures a screenshot from a YouTube video at a specific timestamp
+ * and generates an AI-based explanation of the content.
+ */
+exports.captureYouTubeScreenshot = async (req, res) => {
   try {
     const { videoId, timestamp } = req.body;
 
@@ -17,7 +23,7 @@ const captureYouTubeScreenshot = async (req, res) => {
     console.log(`🎬 Processing Video ID: ${videoId} at Timestamp: ${timestamp}`);
 
     const browser = await puppeteer.launch({
-      headless: "new",
+      headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     });
 
@@ -55,23 +61,20 @@ const captureYouTubeScreenshot = async (req, res) => {
       screenshot = await page.screenshot({ type: "png", fullPage: false });
     }
 
-    // Define save path
-    const savePath = `C:\\Users\\admin\\Desktop\\Synergy\\LinearDepression_PriyanshShah\\frontend\\temp`;
+    await browser.close();
 
-    if (!fs.existsSync(savePath)) {
-      fs.mkdirSync(savePath, { recursive: true });
-    }
+    // ✅ Restore saving in `frontend/temp` directory
+    const savePath = `C:\\Users\\admin\\Desktop\\Synergy\\LinearDepression_PriyanshShah\\frontend\\temp`;
+    await fs.mkdir(savePath, { recursive: true });
 
     // Save screenshot
     const fileName = `screenshot_${videoId}_${Date.now()}.png`;
     const filePath = path.join(savePath, fileName);
-    fs.writeFileSync(filePath, screenshot);
+    await fs.writeFile(filePath, screenshot);
     console.log(`✅ Screenshot saved at: ${filePath}`);
 
-    await browser.close();
-
     // 🔥 Call Gemini API to describe the image
-    const description = await getGeminiDescription(screenshot);
+    const description = await getGeminiDescription(filePath);
 
     res.json({
       success: true,
@@ -86,39 +89,43 @@ const captureYouTubeScreenshot = async (req, res) => {
   }
 };
 
-// 🎯 Function to Get Image Description from Gemini
-const getGeminiDescription = async (imageBuffer) => {
-    try {
-      const base64Image = imageBuffer.toString("base64");
-  
-      console.log("🖼️ Base64 Image Data:", base64Image.substring(0, 100) + "..."); // Log first 100 chars
-  
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          contents: [
-            {
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: "image/png",
-                    data: base64Image,
-                  },
-                },
-              ],
-            },
-          ],
-        }
-      );
-  
-      console.log("📡 Gemini API Response:", JSON.stringify(response.data, null, 2));
-  
-      return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "No description available";
-    } catch (error) {
-      console.error("🔥 Gemini API Error:", error?.response?.data || error.message);
-      return "Failed to generate description.";
-    }
-  };
-  
+/**
+ * Calls Gemini API to describe an image
+ */
+const getGeminiDescription = async (imagePath) => {
+  try {
+    const imageBuffer = await fs.readFile(imagePath);
+    const imageBase64 = imageBuffer.toString("base64");
 
-module.exports = { captureYouTubeScreenshot };
+    const prompt = `Analyze this YouTube video screenshot and describe what is happening in detail.
+    Return the response in this exact JSON format:
+    {
+      "scene": "<Give the description of any study things that are shown on the screen- any diagrams or some equations or some text on the screen only related to studying nothing else.Explain anything about the diagram or text or equation>",
+      "objects": ["<List of key objects visible in the screenshot>"],
+      "possible_topic": "<What this video might be about>",
+      "contextual_info": "<Additional details based on what is seen in the image>"
+    }`;
+
+    const result = await model.generateContent([
+      { text: prompt },
+      { inlineData: { mimeType: "image/png", data: imageBase64 } }
+    ]);
+
+    let responseText = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    console.log("📡 Raw Gemini API Response:", responseText);
+
+    // ✅ Remove triple backticks (` ```json `) and trim the response
+    responseText = responseText.replace(/```json|```/g, "").trim();
+
+    // ✅ Attempt to parse JSON safely
+    const jsonResponse = JSON.parse(responseText);
+    console.log("✅ Parsed JSON Response:", jsonResponse);
+
+    return jsonResponse;
+
+  } catch (error) {
+    console.error("🔥 Gemini API Error:", error);
+    return { error: "Failed to generate description due to invalid JSON format." };
+  }
+};

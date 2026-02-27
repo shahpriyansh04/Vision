@@ -11,6 +11,10 @@ import os
 import warnings
 import tempfile
 import requests
+import json
+from collections import defaultdict
+from datetime import datetime
+
 from qna_using_pinecone import store_embeddings, query_pinecone  # Import the functions
 warnings.filterwarnings("ignore")
 
@@ -233,6 +237,34 @@ def query_route():
         return jsonify({"response": response}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+def load_data(filepath): 
+    data=[]
+    with open(filepath, 'r') as file:
+        for line in file:
+            data.append(json.loads(line))
+    return data
+
+def filter_and_group_data(data, keyword):
+    filtered_data = [post for post in data if keyword.lower() in post['data']['selftext'].lower() or keyword.lower() in post['data']['title'].lower()]
+    grouped_data = defaultdict(int)
+    
+    for post in filtered_data:
+        date = datetime.utcfromtimestamp(post['data']['created_utc']).strftime('%Y-%m-%d')
+        grouped_data[date] += 1
+    
+    return grouped_data
+
+data = load_data('C:/Users/admin/Downloads/data.jsonl')
+
+@app.route('/filter_posts', methods=['GET'])
+def filter_posts():
+    keyword = request.args.get('keyword')
+    if not keyword:
+        return jsonify({"error": "Keyword is required"}), 400
+    
+    grouped_data = filter_and_group_data(data, keyword)
+    return jsonify(grouped_data)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5001)
