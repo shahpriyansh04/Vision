@@ -1,6 +1,8 @@
 const puppeteer = require("puppeteer");
-const fs = require("fs").promises; // Use fs.promises for async handling
+const fs = require("fs");
+const fsPromises = require("fs").promises;
 const path = require("path");
+const axios = require("axios");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 require("dotenv").config();
 
@@ -12,7 +14,8 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
  * Captures a screenshot from a YouTube video at a specific timestamp
  * and generates an AI-based explanation of the content.
  */
-exports.captureYouTubeScreenshot = async (req, res) => {
+const captureYouTubeScreenshot = async (req, res) => {
+  let browser;
   try {
     const { videoId, timestamp } = req.body;
 
@@ -26,49 +29,88 @@ exports.captureYouTubeScreenshot = async (req, res) => {
       `🎬 Processing Video ID: ${videoId} at Timestamp: ${timestamp}`
     );
 
-    const browser = await puppeteer.launch({
+    browser = await puppeteer.launch({
       headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--autoplay-policy=no-user-gesture-required",
+      ],
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
 
-    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&start=${Math.floor(
+    // Set a realistic user agent to avoid YouTube blocking
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
+
+    const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&start=${Math.floor(
       timestamp
-    )}`;
+    )}&controls=0&modestbranding=1`;
     console.log(`🔗 Navigating to: ${embedUrl}`);
 
-    await page.goto(embedUrl, { waitUntil: "networkidle2" });
+    await page.goto(embedUrl, { waitUntil: "networkidle2", timeout: 30000 });
 
     console.log("⏳ Waiting for video element...");
     await page.waitForSelector("video", { timeout: 15000 });
 
-    // Ensure video is playing
-    await page.evaluate(() => {
+    // Ensure video is playing and seek to the correct timestamp
+    await page.evaluate((ts) => {
       const video = document.querySelector("video");
       if (video) {
         video.muted = true;
+        video.currentTime = ts;
         video.play();
       }
-    });
+    }, timestamp);
 
     console.log("🎥 Video loaded. Waiting for rendering...");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 7000));
+
+    // Check if video element is visible and has dimensions
+    const videoInfo = await page.evaluate(() => {
+      const video = document.querySelector("video");
+      if (!video) return null;
+      const rect = video.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        readyState: video.readyState,
+        currentTime: video.currentTime,
+      };
+    });
+    console.log("📐 Video info:", videoInfo);
 
     console.log("📸 Taking screenshot...");
-    const videoElement = await page.$("video");
-
     let screenshot;
-    if (videoElement) {
+
+    if (videoInfo && videoInfo.width > 0 && videoInfo.height > 0) {
+      // Video element is visible, screenshot it directly
+      const videoElement = await page.$("video");
       screenshot = await videoElement.screenshot({ type: "png" });
+      console.log("✅ Captured video element screenshot");
     } else {
-      console.log("⚠️ Video element not found. Capturing full page...");
-      screenshot = await page.screenshot({ type: "png", fullPage: false });
+      // Fallback: take a full page screenshot (crop the video area)
+      console.log("⚠️ Video element not visible. Capturing full page...");
+      screenshot = await page.screenshot({
+        type: "png",
+        clip: { x: 0, y: 0, width: 1280, height: 720 },
+      });
+      console.log("✅ Captured full page screenshot as fallback");
     }
 
     // Define save path
-    const savePath = `C:\\Users\\admin\\Desktop\\Synergy\\LinearDepression_PriyanshShah\\frontend\\temp`;
+    const savePath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "frontend",
+      "temp"
+    );
 
     if (!fs.existsSync(savePath)) {
       fs.mkdirSync(savePath, { recursive: true });
@@ -77,8 +119,11 @@ exports.captureYouTubeScreenshot = async (req, res) => {
     // Save screenshot
     const fileName = `screenshot_${videoId}_${Date.now()}.png`;
     const filePath = path.join(savePath, fileName);
-    await fs.writeFile(filePath, screenshot);
+    await fsPromises.writeFile(filePath, screenshot);
     console.log(`✅ Screenshot saved at: ${filePath}`);
+
+    await browser.close();
+    browser = null;
 
     // 🔥 Call Gemini API to describe the image
     const description = await getGeminiDescription(filePath);
@@ -91,6 +136,7 @@ exports.captureYouTubeScreenshot = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Screenshot error:", error);
+    if (browser) await browser.close();
     res.status(500).json({
       success: false,
       error: "Failed to capture screenshot",
@@ -100,38 +146,36 @@ exports.captureYouTubeScreenshot = async (req, res) => {
 };
 
 // 🎯 Function to Get Image Description from Gemini
-const getGeminiDescription = async (imageBuffer) => {
-    try {
-      const base64Image = imageBuffer.toString("base64");
-  
-      console.log("🖼️ Base64 Image Data:", base64Image.substring(0, 100) + "..."); // Log first 100 chars
-  
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          contents: [
-            {
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: "image/png",
-                    data: base64Image,
-                  },
-                },
-              ],
-            },
-          ],
-        }
-      );
-  
-      console.log("📡 Gemini API Response:", JSON.stringify(response.data, null, 2));
-  
-      return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "No description available";
-    } catch (error) {
-      console.error("🔥 Gemini API Error:", error?.response?.data || error.message);
-      return "Failed to generate description.";
-    }
-  };
-  
+const getGeminiDescription = async (imagePath) => {
+  try {
+    const imageBuffer = await fsPromises.readFile(imagePath);
+    const base64Image = imageBuffer.toString("base64");
+
+    console.log(
+      "🖼️ Base64 Image Data:",
+      base64Image.substring(0, 100) + "..."
+    );
+
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: "image/png",
+          data: base64Image,
+        },
+      },
+      "Describe what is shown in this screenshot from a YouTube video. Focus on any educational content, diagrams, text, or key visuals.",
+    ]);
+
+    const description = result.response.text();
+    console.log("📡 Gemini Description:", description.substring(0, 200) + "...");
+    return description;
+  } catch (error) {
+    console.error(
+      "🔥 Gemini API Error:",
+      error?.response?.data || error.message
+    );
+    return "Failed to generate description.";
+  }
+};
 
 module.exports = { captureYouTubeScreenshot };
